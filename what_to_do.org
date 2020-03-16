@@ -1,0 +1,96 @@
+* How to continue work on this project
+I'd suggest looking through all of these (open this file in Emacs or GitHub so
+it displays nicely with clickable links).
+
+** Important locations in the old code
+The old code contained all viewer-related code in the file [[./scripts/viewer.py]].
+I'd suggest keeping a renamed copy of that file (just check out a commit prior
+to the GTK modifications) so you have a reference when adapting new code to it
+without having it tracked in the repository.
+
+- Almost all dotcode generation is contained in the ~ContainerNode~ class. Some
+  utility functions are defined in the global scope but these can easily be
+  moved into a new class as ~@staticmethod~s.
+
+- The ~ContainerNode~ hierarchy is like the ~StateTreeModel~ (except it could
+  not be used for combo boxes).
+
+- GUI-related setup code is completely contained in the ~__init__~ function of
+  the ~HsmViewerFrame~ class. This is important when connecting GUI callbacks.
+
+- Server and client logic is contained in [[./src/hsm]] (this does probably not
+  need to be touched unless some larger extensions are desired).
+
+** Important locations in the new code
+[[./src/hsm/viewer/state_tree_model.py]] and [[./src/hsm/viewer/state_node.py]] contain
+most of the model logic. These are relevant for performance and are the core
+inner workings of the application. Some possible problems are discussed in the
+[[Miscellaneous]] section.
+
+- ~StateTreeModel~ uses some metaprogramming to access properties of its
+  ~StateNode~s. As we navigate through the ~Gtk.TreeStore~ using ~Gtk.TreeIter~s,
+  we usually work with those instead of the underlying ~StateNode~s. The
+  metaprogrammed methods are only defined on selected properties that are listed
+  in the creator functions and have the same name as the attributes.
+  Other methods exist that do the same but act on local root properties; these
+  automatically walk up from the given ~Gtk.TreeIter~ to its local root node, get
+  the underlying ~StateNode~ and get the property from it.
+
+  If metaprogramming is deemed too complex or less readable, the same methods exist
+  in comments that duplicate all the relevant code. Decide which one is better and
+  remove the other.
+
+  ~StateTreeModel~ overrides some methods from the ~Gtk.TreeStore~ parent class
+  for convenience and to (for example) handle root node updates correctly. I'd
+  recommend getting familiar with these changes and what they entail.
+
+- The basic building blocks for GUI elements are in
+  [[./src/hsm/viewer/gui_element_builder.py]] (shortened and imported as ~geb~).
+  These should be used as they contain some best practices and default settings.
+
+** Comments marked with 'FIXME'
+Necessary improvements or fixes to have the program running correctly and as
+desired.
+*** Most important
+1. Dotcode generation:
+   For this, adapt the code in the old ContainerNode class (mentioned [[Important locations in the old code][above]]).
+2. GUI interaction:
+   Many callbacks are still missing for a usable and correctly working program.
+   Why would you need buttons if you cannot interact with them?
+
+** Comments marked with 'TODO'
+These are not so important decisions or improvements.
+
+** Miscellaneous
+*** Function privacy
+May still be on 'prototype level' for the ~StateTreeModel~ class.
+*** ~TreeView~s are too slow
+- Could be due to the render function in which we dynamically render weights of
+  the trees. To fix, add a new sub-column that sets the weight from static
+  values to the ~Gtk.TreeViewColumn~ in [[./src/hsm/viewer/tree_view.py]] (example
+  [[https://stackoverflow.com/questions/49836499/make-only-some-rows-bold-in-a-gtk-treeview][here]]). You would then need to change the weight by modifying the static
+  ~Pango.Weight~ value.
+- Path searching may be too slow; we currently (a) do not use a dictionary to
+  access nodes in the tree but do a O(breadth * depth) search through the tree
+  each time. We also (b) do a linear walk up from a ~StateNode~ to its
+  ~RootStateNode~ (although this should not ever matter).
+  For (a), some refactoring is required to not walk the paths but use the new
+  dictionary instead. The dictionary would also have to keep up to date with all
+  nodes correctly. We already overwrite some methods for convenience and to
+  update other things correctly.
+*** Include path issue
+You may have to insert the following code at the top of the [[./scripts/viewer.py]]
+file (under ~import sys~). This may fix include-path related issue (though only
+locally on the university/netboot computers; also, the path may be wrong due to
+updates):
+#+BEGIN_SRC python
+# Add rospkg path
+sys.path.append('/vol/famula/nightly/lib/python3.6/site-packages')
+#+END_SRC
+*** How to search
+I found getting to good documentation hard in the beginning; if you are
+searching for the ~Gtk.TreeStore~ class, for example, append either 'pygtk' or
+'lazka'. 'pkgtk' references the official GNOME documentation while 'lazka'
+references privately maintained (and sometimes outdated) documentation. It was
+still often helpful to me.
+*** Don't forget to remove /this/ file when it's not needed anymore!
